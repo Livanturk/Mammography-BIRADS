@@ -94,9 +94,65 @@ class BilateralMammogramDataset(Dataset):
                         'cc_path' : str(rcc),
                         'mlo_path': str(rmlo),
                         'label': label,
-                        'side': 'right',
                         'patient': patient_folder.name,
                         'birads': birads
                     })
                     
-                
+    def _detect_imbalanced_classes(self) -> List[int]:
+        """
+        Verdiğimiz verisetinde imbalance olup olmadığı kontrol eder
+        Eğer imbalance varsa, oversampling stratejisini (auto, threshold, manual) seçer (bunu config.py dosyasından kontrol edip değiştirebilirsiniz) 
+        !! Bu fonksiyon oversampling'in nasıl yapılacağına dair bilgi içermiyor
+        !! bir alttaki apply_oversampling fonksiyonu oversample işlemi (oversample metodları) yapar
+        !! Bu fonksiyon sadece imbalance tespiti ve oversampling stratejisi seçimi içindir. 
+        """
+        class_counts = self.get_class_distribution()
+        
+        if not class_counts:
+            return []
+        
+        max_count = max(class_counts.values())
+        min_count = min(class_counts.values())
+        total_count = sum(class_counts.values())
+        
+        print(f"Class Distribution:")
+        print(f"En yüksek: {max_count} örnek")
+        print(f"En düşük: {min_count} örnek")
+        print(f"Toplam: {total_count}")
+        print(f"Imbalance oranı: %{min_count/max_count:.2f}")
+        
+        # Loopta kullanılacak parametre 0'dan başlıyor, o yüzden bu mappingi oluşturdum.
+        birads_mapping = {0: 1, 1: 2, 2: 4, 3: 5}
+        
+        for class_id in sorted(class_counts.keys()):
+            count = class_counts[class_id]
+            percentage = (count / total_count) * 100
+            birads = birads_mapping[class_id] # Burda tekrardan orijinal birads skoruna döner
+            print(f"BI-RADS {birads} (class {class_id}): {count:4d} örnek %({percentage:5.1f})")
+        
+        classes_to_oversample = []
+        strategy = self.config.OVERSAMPLING_STRATEGY
+        
+        # Manual olursa bunu elle config dosyasındaki MANUAL_OVERSAMPLE_CLASSES'a bağlarız
+        if strategy == "manual":
+            classes_to_oversample = self.config.MANUAL_OVERSAMPLE_CLASSES
+            print(f" Manual oversampling: {classes_to_oversample}")
+        
+        #  (bir classtaki örnek sayısı / en kalabalık class örnek sayısı) belirli bir thresholdun altındaysa o class oversample edilir.
+        # Threshold değerini configden ayarlayabilirsiniz (OVERSAMPLING_THRESHOLD)
+        elif strategy == "threshold":
+            # en kalabalık sınıf x threshold oranı = sınır
+            threshold_count = max_count * self.config.OVERSAMPLING_THRESHOLD
+            
+            for class_id, count in class_counts.items():
+                # Eğer bir classın örnek sayısı threshold değerinden azsa oversample yapılacak class olarak eklenir.
+                if count < threshold_count:
+                    classes_to_oversample.append(class_id)
+        
+                    
+
+            
+            
+        
+        
+        
