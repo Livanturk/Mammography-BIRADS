@@ -79,7 +79,6 @@ class Config:
     USE_OVERSAMPLING = True
     OVERSAMPLING_STRATEGY = "auto" # auto, threshold veya manual
     OVERSAMPLING_THRESHOLD = 0.5 # Eğer bir class, en fazla örnek olan sınıftan %X azsa, o class oversample edilir (Default %50, değiştirebilirsiniz)
-    
     # Manual oversampling -> Eğer oversampling yaklaşımı manuel olacaksa (mesela sadece BI-RADS_2 oversample etmek istersek)
     MANUAL_OVERSAMPLE_CLASSES = [] # Mesela [1] olursa bu BI-RADS 2 olur (0 index mantığı var)
     
