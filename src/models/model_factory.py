@@ -218,7 +218,7 @@ def get_model_info(model_name):
         
         return {
             'name': model_name,
-            'total_params': False,
+            'total_params': total_params,
             'available': True
             }
     except Exception as e:
