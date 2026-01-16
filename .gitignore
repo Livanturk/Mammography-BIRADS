@@ -2,3 +2,4 @@ data/
 .pytest_cache/
 pytorch/
 birads/
+__pycache__/
