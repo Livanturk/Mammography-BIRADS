@@ -4,103 +4,136 @@ Config-aware model oluşturma
 """
 
 import timm
+import torch
+import torch.nn as nn
+from pathlib import Path
 
+# İnternetten dinamik olarak çekemediğmiz için local olarak transfer learning weightlerini tutmamız gerekiyor.
+WEIGHTS_DIR = Path(__file__).parent.parent.parent / "pretrained_weights"
 
-
-def get_model(config):
-    """
-    Early fusion için model factory
-    """
+def load_pretrained_weights(model, model_name):
+    """Pretrained weightleri klasörden çeker"""
+    weight_path = WEIGHTS_DIR / f"{model_name}.pth"
     
-    # Bilateral için 2 kanal (CC + MLO)
-    # Multi-view için 4 kanal (LCC + LMLO + RCC + RMLO)
-    in_channels = 2 if config.APPROACH == "bilateral" else 4
-    
-    print(f"Model oluşturuluyor...")
-    print(f"Model: {config.MODEL_NAME}")
-    print(f"Pretrained: {config.PRETRAINED}")
-    print(f"In channels: {in_channels}")
-    print(f"Num classes: {config.NUM_CLASSES}")
-    
-    try:
-        model = timm.create_model(
-            config.MODEL_NAME,
-            pretrained=config.PRETRAINED,
-            num_classes=config.NUM_CLASSES,
-            in_chans=in_channels
+    if not weight_path.exists():
+        raise FileNotFoundError(
+            f"Pretrained weights bulunamadı: {weight_path}\n"
+            f"Çözüm: python scripts/download_weights/requests.py çalıştır."
         )
-    except Exception as e:
-        raise ValueError(
-            f"Model oluşturulamadı: {config.MODEL_NAME}\n"
-            f"Hata: {str(e)}\n"
-            f"timm.list_models() ile mevcut modelleri görebilirsin."
-        )
+        
+    print(f"Local weightler yükleniyor: {weight_path.name}")
     
-    # Model bilgileri
-    total_params = sum(p.numel() for p in model.parameters())
-    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    # State dict yükleme
+    state_dict = torch.load(weight_path, map_location = 'cpu')
     
-    print(f"Model İstatistikleri:")
-    print(f"Total params: {total_params:,}")
-    print(f"Trainable params: {trainable_params:,}")
-    print(f"Non-trainable params: {total_params - trainable_params:,}")
-    print(f"✅ Model hazır!")
+    # Model'e yükle (strict = False diyerek eksik veya fazla key sorununu çözebiliriz)
+    missing_keys, unexpected_keys = model.load_state_dict(state_dict, strict = False)
+    
+    if missing_keys:
+        print(f"Eksik key: {len(missing_keys)}")
+    if unexpected_keys:
+        print(f"Unexpected keys: {len(unexpected_keys)}")
+        
+    print(f"Weightler yüklendi")
     
     return model
 
-
-def list_available_models():
+def adapt_classifier(model, num_classes):
     """
-    timm kütüphanesindeki mevcut modelleri listele
-    
-    Örnek:
-        >>> models = list_available_models()
-        >>> print(f"Toplam {len(models)} model mevcut")
-        >>> print("İlk 10 model:", models[:10])
+    Classifier'ı yeni num_classes'a adapte eder
     """
-    return timm.list_models()
-
-
-def get_model_info(model_name):
-    """
-    Bir model hakkında bilgi al
     
-    Args:
-        model_name: Model ismi (örn. 'efficientnet_b0')
-    
-    Returns:
-        dict: Model bilgileri
-    
-    Example:
-        >>> info = get_model_info('efficientnet_b0')
-        >>> print(info)
-    """
-    try:
-        # Model oluştur (pretrained=False, hızlı)
-        model = timm.create_model(model_name, pretrained=False, num_classes=1000)
+    # EfficientNet
+    if hasattr(model, 'classifier'):
+        in_features = model.classifier.in_features
+        model.classifier = nn.Linear(in_features, num_classes)
+        print(f"Classifier adapte edildi: {in_features} -> {num_classes}")
         
-        # Bilgileri topla
-        total_params = sum(p.numel() for p in model.parameters())
+    # ResNet
+    elif hasattr(model, 'fc'):
+        in_features = model.fc.in_features
+        model.classifier = nn.Linear(in_features, num_classes)
+        print(f"Classifier adapte edildi: {in_features} -> {num_classes}")
         
-        # Default input size (bazı modellerde var)
-        try:
-            default_cfg = model.default_cfg
-            input_size = default_cfg.get('input_size', (3, 224, 224))
-        except:
-            input_size = (3, 224, 224)
-        
-        return {
-            'name': model_name,
-            'total_params': total_params,
-            'input_size': input_size,
-            'available': True
-        }
+    # ConvNeXt, Swin, ViT
+    elif hasattr(model, 'head'):
+        if hasattr(model.head, 'fc'):
+            in_features = model.head.fc.in_features
+            model.head.fc = nn.Linear(in_features, num_classes)
+        else:
+            in_features = model.head.in_features
+            model.head = nn.Linear(in_features, num_classes)
+        print(f"Classifier adapte edildi: {in_features} -> {num_classes}")
     
-    except Exception as e:
-        return {
-            'name': model_name,
-            'available': False,
-            'error': str(e)
-        }
+    return model
 
-
+def adapt_first_conv(model, in_channels):
+    """
+    İlk layer'ı in_channels'a göre adapte eder
+    Elimizdeki PNG 1 kanallı (early fusion varsa 2) ve pretrained modeller 3 kanallı
+    Biz de pretrained modelin ilk layerını düşürürüz 
+    """
+    
+    # EfficientNet
+    if hasattr(model, 'conv_stem'):
+        old_conv = model.conv_stem
+        new_conv = nn.Conv2D(
+            in_channels,
+            old_conv.out_channels,
+            kernel_size = old_conv.kernel_size,
+            stride = old_conv.stride,
+            padding = old_conv.stride,
+            bias = False
+        )
+        
+        # Weightleri adapte et
+        with torch.no_grad():
+            if in_channels <= 3:
+                # Kanal azaltma (İlk in_channels kadarını kopyalar)
+                new_conv.weight[:, :in_channels] = old_conv.weight[:, :in_channels]
+            else:
+                # Kanal arttırma: Loop ile tekrarlanır
+                for i in range(in_channels):
+                    new_conv.weight[:, i] = old_conv.weight[:, i % 3]
+        
+        model.conv_stem
+    
+    #ResNet
+    elif hasattr(model, 'conv1'):
+        old_conv = model.conv1
+        new_conv = nn.Conv2d(
+            in_channels,
+            old_conv.out_channels,
+            kernel_size = old_conv.kernel_size,
+            stride = old_conv.stride,
+            padding = old_conv.padding,
+            bias = False
+        )
+        
+        with torch.no_grad():
+            if in_channels <=3:
+                new_conv.weight[:, :in_channels] = old_conv.weight[:, :in_channels]
+            else:
+                for i in range(in_channels):
+                    new_conv.weight[:, i] = old_conv[:, i % 3]
+        model.conv1 = new_conv
+        
+    elif hasattr(model, 'stem') and hasattr(model.stem, '0'):
+        old_conv = model.stem[0]
+        new_conv = nn.Conv2d(
+            in_channels,
+            old_conv.out_channels,
+            kernel_size = old_conv.kernel_size,
+            stride = old_conv.stride,
+            padding = old_conv.padding,
+            bias = False
+        )
+        
+        with torch.no_grad():
+            if in_channels <= 3:
+                new_conv.weight[:, :in_channels] = old_conv.weight[:, :in_channels]
+            else:
+                for i in range(in_channels):
+                    new_conv.weight[:, i] = old_conv[:, i % 3]
+                    
+            

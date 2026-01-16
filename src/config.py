@@ -13,7 +13,7 @@ class Config:
     # Train
     TRAIN_CLASSES = {1: "BI-RADS_1", 2: "BI-RADS_2", 4: "BI-RADS_4", 5: "BI-RADS_5"}
     # Test
-    TEST_CLASSES = {1: "BI-RADS_1_TEST", 2: "BI-RADS_2_TEST", 4: "BI-RADS_4_TEST", 5: "BI-RADS_5_TEST"}
+    TEST_CLASSES = {1: "BI-RADS_1_Test", 2: "BI-RADS_2_Test", 4: "BI-RADS_4_Test", 5: "BI-RADS_5_Test"}
     VIEW_NAMES = ["LCC.png", "LMLO.png", "RCC.png", "RMLO.png"]
     
     # STRATEJİ VE YAKLAŞIMLAR (APPROACH)
@@ -33,7 +33,7 @@ class Config:
     
     # GÖRÜNTÜ
     IMG_SIZE = 384
-    NUM_CLASSES = 4
+    NUM_CLASSES = 4 # BI-RADS 1, 2, 4, 5
     # ImageNet 3 channel bekliyor ancak elimizdeki görüntüler grayscale (1 kanallı)
     # Bu yüzden IN_CHANNELS ile modelin weightleri RGB channelların ortalaması alınarak 1 channela indirgeniyor.
     IN_CHANNELS = 1 # GÖrüntüler grayscale (tek kanallı) ise
@@ -83,7 +83,7 @@ class Config:
     MANUAL_OVERSAMPLE_CLASSES = [] # Mesela [1] olursa bu BI-RADS 2 olur (0 index mantığı var)
     
     # SCHEDULER
-    SCHEDULER_TYPE = True
+    SCHEDULER_TYPE = "cosine"  # "cosine", "plateau", "onecycle"
     
     # ATTENTION
     USE_ATTENTION = True
