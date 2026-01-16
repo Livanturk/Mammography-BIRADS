@@ -1,6 +1,5 @@
 """
 Early Fusion
-Config-aware model oluşturma
 """
 
 import timm
