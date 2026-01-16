@@ -77,12 +77,12 @@ def adapt_first_conv(model, in_channels):
     # EfficientNet
     if hasattr(model, 'conv_stem'):
         old_conv = model.conv_stem
-        new_conv = nn.Conv2D(
+        new_conv = nn.Conv2d(
             in_channels,
             old_conv.out_channels,
             kernel_size = old_conv.kernel_size,
             stride = old_conv.stride,
-            padding = old_conv.stride,
+            padding = old_conv.padding,
             bias = False
         )
         
@@ -96,7 +96,7 @@ def adapt_first_conv(model, in_channels):
                 for i in range(in_channels):
                     new_conv.weight[:, i] = old_conv.weight[:, i % 3]
         
-        model.conv_stem
+        model.conv_stem = new_conv
     
     #ResNet
     elif hasattr(model, 'conv1'):
@@ -115,9 +115,10 @@ def adapt_first_conv(model, in_channels):
                 new_conv.weight[:, :in_channels] = old_conv.weight[:, :in_channels]
             else:
                 for i in range(in_channels):
-                    new_conv.weight[:, i] = old_conv[:, i % 3]
+                    new_conv.weight[:, i] = old_conv.weight[:, i % 3]
         model.conv1 = new_conv
-        
+    
+    # ConvNeXt
     elif hasattr(model, 'stem') and hasattr(model.stem, '0'):
         old_conv = model.stem[0]
         new_conv = nn.Conv2d(
@@ -134,6 +135,132 @@ def adapt_first_conv(model, in_channels):
                 new_conv.weight[:, :in_channels] = old_conv.weight[:, :in_channels]
             else:
                 for i in range(in_channels):
-                    new_conv.weight[:, i] = old_conv[:, i % 3]
-                    
+                    new_conv.weight[:, i] = old_conv.weight[:, i % 3]
+
+        model.stem[0] = new_conv
+        
+        print(f"First conv: 3 -> {in_channels} kanal")
+    return model
+
+def get_model(config):
+    """
+    Early fusion için model factory
+    
+    Config'den parametreleri alır ve local weightleri kullanır.
+    
+    örn: from config import Config
+         model = get_model(Config)
+    """
+    
+    # Bilateral = 2 channel (CC + MLO) / Multi-view 4 kanal (RCC-LCC-RMLO-LMLO)
+    in_channels = 2 if config.APPROACH == "bilateral" else 4
+    
+    print(f"Model ismi: {config.MODEL_NAME}")
+    print(f"Pretrained: {config.PRETRAINED} (local)")
+    print(f"In Channels: {in_channels}")
+    print(f"Num classes: {config.NUM_CLASSES}")
+    
+    try:
+        # localden pretrained weightleri kullanır
+        if config.PRETRAINED:
+            # Önce boş bir model oluşturur (PRETRAINED = False)
+            model = timm.create_model(
+                config.MODEL_NAME,
+                pretrained = False,
+                num_classes = 1000, # ImageNet (weights için gerekli)
+                in_chans = 3 # Pretrained için in_chans = 3 olmalı            
+            )
             
+            # Local weightleri yükler
+            model = load_pretrained_weights(model, config.MODEL_NAME)
+            
+            # Classifier değiştir (1000 -> 4 (BI-RADS))
+            model = adapt_classifier(model, config.NUM_CLASSES)
+            
+            # First convolutional layer'ı adapte et (3 -> 1 veya 3 -> 2)
+            if in_channels != 3:
+                print(f"First conv layer {in_channels} kanala adapte ediliyor.")
+                model = adapt_first_conv(model, in_channels)
+        # Pretrained yoksa (random initialization uyguluyor)   
+        else:
+            model = timm.create_model(
+                config.MODEL_NAME,
+                pretrained = False,
+                num_classes = config.NUM_CLASSES,
+                in_chans = in_channels
+            )
+            
+            print(f"Random initialization: (PRETRAINED = False)")
+    
+    except Exception as e:
+        raise ValueError(
+            f"Model oluşturulamadı: {config.MODEL_NAME}\n"
+            f"Hata: {str(e)}\n"
+            f"Çözüm-1: PRETRAINED = False yapın config.py dosyasında\n"
+            f"Çözüm-2: python scripts/download_weights_requests.py commandini terminalde çalıştırın"
+        )
+        
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    
+    print(f"\nModel İstatistikleri:")
+    print(f"Total params: {total_params:,}")
+    print(f"Trainable params: {trainable_params:,}")
+    print(f"Model hazır!\n")
+    
+    return model
+
+def get_model_info(model_name):
+    """Kullanılan modelin bilgisini getirir."""
+    try:
+        model = timm.create_model(model_name, pretrained = False, num_classes = 1000)
+        total_params = sum(p.numel() for p in model.parameters())
+        
+        return {
+            'name': model_name,
+            'total_params': False,
+            'available': True
+            }
+    except Exception as e:
+        return {
+            'name': model_name,
+            'available': False,
+            'error': str(e)
+        }
+    
+def list_available_models():
+    """Mevcut modelleri gösterir"""
+    return timm.list_models()
+
+# Test kodu
+if __name__ == "__main__":
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    
+    from config import Config
+    
+    print("="*70)
+    print("MODEL FACTORY TEST (LOCAL WEIGHTS)")
+    print("="*70)
+    
+    # Test 1: Model oluştur
+    print("\nTest 1: Model Olusturma")
+    Config.PRETRAINED = True
+    model = get_model(Config)
+
+    # Test 2: Forward pass
+    print("\nTest 2: Forward Pass")
+    x = torch.randn(2, 2, 384, 384)  # Bilateral için 2 kanal
+    
+    with torch.no_grad():
+        output = model(x)
+    
+    print(f"Input: {x.shape}")
+    print(f"Output: {output.shape}")
+    print(f"Beklenen: (2, {Config.NUM_CLASSES})")
+    
+    assert output.shape == (2, Config.NUM_CLASSES), "Shape yanlis!"
+    print("Test basarili!")
+    
+    print("\n" + "="*70)
