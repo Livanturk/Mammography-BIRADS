@@ -3,3 +3,4 @@ data/
 pytorch/
 birads/
 __pycache__/
+pretrained_weights/
