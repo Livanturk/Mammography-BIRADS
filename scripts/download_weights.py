@@ -36,8 +36,8 @@ def download_file(url, save_path):
         bool: Başarılı mı?
     """
     try:
-        print(f"\n📥 İndiriliyor: {save_path.name}")
-        print(f"   URL: {url}")
+        print(f"\nİndiriliyor: {save_path.name}")
+        print(f"URL: {url}")
         
         # HEAD request ile dosya boyutunu al
         response = requests.head(url, verify=False, allow_redirects=True, timeout=10)
@@ -54,7 +54,7 @@ def download_file(url, save_path):
         with open(save_path, 'wb') as f:
             if total_size > 0:
                 with tqdm(
-                    desc=f"   İndiriliyor",
+                    desc=f" İndiriliyor",
                     total=total_size,
                     unit='B',
                     unit_scale=True,
@@ -72,35 +72,35 @@ def download_file(url, save_path):
         
         # Dosya boyutunu kontrol et
         file_size = save_path.stat().st_size / (1024 * 1024)
-        print(f"   ✅ İndirildi: {file_size:.2f} MB")
+        print(f"İndirildi: {file_size:.2f} MB")
         
         return True
     
     except requests.exceptions.Timeout:
-        print(f"   ❌ Timeout hatası: Bağlantı zaman aşımına uğradı")
+        print(f"Timeout hatası: Bağlantı zaman aşımına uğradı")
         return False
     
     except requests.exceptions.ConnectionError:
-        print(f"   ❌ Bağlantı hatası: İnternet bağlantısını kontrol et")
+        print(f"Bağlantı hatası: İnternet bağlantısını kontrol et")
         return False
     
     except requests.exceptions.HTTPError as e:
-        print(f"   ❌ HTTP hatası: {e}")
+        print(f"HTTP hatası: {e}")
         return False
     
     except Exception as e:
-        print(f"   ❌ Hata: {str(e)}")
+        print(f"Hata: {str(e)}")
         return False
 
 
 def main():
     """Ana fonksiyon"""
     print("\n" + "="*70)
-    print("🔽 PRETRAINED WEIGHTS İNDİRME")
-    print("   SSL Bypass + Progress Bar")
+    print("PRETRAINED WEIGHTS İNDİRME")
+    print("SSL Bypass + Progress Bar")
     print("="*70)
-    print(f"\n📁 Klasör: {WEIGHTS_DIR.absolute()}")
-    print(f"📊 Model sayısı: {len(WEIGHTS_URLS)}")
+    print(f"\nKlasör: {WEIGHTS_DIR.absolute()}")
+    print(f"Model sayısı: {len(WEIGHTS_URLS)}")
     
     success = 0
     failed = 0
@@ -112,7 +112,7 @@ def main():
         # Zaten varsa atla
         if save_path.exists():
             file_size = save_path.stat().st_size / (1024 * 1024)
-            print(f"\n⏭️  Atlanıyor: {model_name}.pth (zaten var, {file_size:.2f} MB)")
+            print(f"\nAtlanıyor: {model_name}.pth (zaten var, {file_size:.2f} MB)")
             success += 1
             continue
         
@@ -125,35 +125,35 @@ def main():
     
     # Özet
     print("\n" + "="*70)
-    print("📊 ÖZET")
+    print("ÖZET")
     print("="*70)
-    print(f"✅ Başarılı: {success}/{len(WEIGHTS_URLS)}")
-    print(f"❌ Başarısız: {failed}/{len(WEIGHTS_URLS)}")
+    print(f"Başarılı: {success}/{len(WEIGHTS_URLS)}")
+    print(f"Başarısız: {failed}/{len(WEIGHTS_URLS)}")
     
     if failed_models:
-        print(f"\n❌ Başarısız modeller:")
+        print(f"\nBaşarısız modeller:")
         for m in failed_models:
             print(f"   - {m}")
         print(f"\nİpucu: Başarısız modelleri manuel indirebilirsin:")
         for m in failed_models:
-            print(f"   {WEIGHTS_URLS[m]}")
+            print(f"{WEIGHTS_URLS[m]}")
     
     # İndirilen dosyalar
-    print(f"\n✅ İndirilen dosyalar:")
+    print(f"\nİndirilen dosyalar:")
     total_size = 0
     for model_name in WEIGHTS_URLS.keys():
         weight_path = WEIGHTS_DIR / f"{model_name}.pth"
         if weight_path.exists():
             size = weight_path.stat().st_size / (1024 * 1024)
             total_size += size
-            print(f"   ✅ {model_name}.pth ({size:.2f} MB)")
+            print(f"{model_name}.pth ({size:.2f} MB)")
         else:
-            print(f"   ❌ {model_name}.pth (eksik)")
+            print(f"{model_name}.pth (eksik)")
     
-    print(f"\n📦 Toplam boyut: {total_size:.2f} MB")
-    print(f"📁 Konum: {WEIGHTS_DIR.absolute()}")
+    print(f"\nToplam boyut: {total_size:.2f} MB")
+    print(f"Konum: {WEIGHTS_DIR.absolute()}")
     print("\n" + "="*70)
-    print("✅ Tamamlandı!")
+    print("Tamamlandı!")
     print("="*70)
 
 
