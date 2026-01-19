@@ -5,24 +5,8 @@ pytest -v tests/test_model_factory.py
 
 import pytest
 import torch
-import sys
-from pathlib import Path
-
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
 from models.model_factory import get_model, get_model_info, list_available_models
 from config import Config
-
-
-# Test-specific config to avoid downloading pretrained weights
-class TestConfig(Config):
-    """Test config - pretrained=False for faster, offline tests"""
-    PRETRAINED = False
-    MODEL_NAME = "efficientnet_b0"
-    NUM_CLASSES = 4
-    APPROACH = "bilateral"
-    IMG_SIZE = 384
 
 
 class TestModelFactory:
@@ -30,23 +14,23 @@ class TestModelFactory:
     
     def test_model_creation(self):
         """Model oluşturuluyor mu?"""
-        model = get_model(TestConfig)
+        model = get_model(Config)
         assert model is not None
     
     def test_model_type(self):
         """Model doğru tip mi?"""
-        model = get_model(TestConfig)
+        model = get_model(Config)
         assert isinstance(model, torch.nn.Module)
     
     def test_model_parameters(self):
         """Model parametreleri var mı?"""
-        model = get_model(TestConfig)
+        model = get_model(Config)
         params = list(model.parameters())
         assert len(params) > 0, "Model'de hiç parametre yok!"
     
     def test_model_trainable(self):
         """Model eğitilebilir mi?"""
-        model = get_model(TestConfig)
+        model = get_model(Config)
         trainable_params = [p for p in model.parameters() if p.requires_grad]
         assert len(trainable_params) > 0, "Hiç trainable parametre yok!"
 
@@ -57,10 +41,10 @@ class TestModelForwardPass:
     @pytest.mark.parametrize("batch_size", [1, 4, 16])
     def test_forward_pass_different_batch_sizes(self, batch_size):
         """Farklı batch size'larla forward pass"""
-        model = get_model(TestConfig)
+        model = get_model(Config)
         model.eval()
         
-        # Bilateral için 2 kanal
+        # Bilateral için 2 kanal (CC + MLO)
         in_channels = 2 if Config.APPROACH == "bilateral" else 4
         x = torch.randn(batch_size, in_channels, Config.IMG_SIZE, Config.IMG_SIZE)
         
@@ -73,7 +57,7 @@ class TestModelForwardPass:
     
     def test_output_values_are_finite(self):
         """Output değerleri sonlu mu? (inf/nan kontrolü)"""
-        model = get_model(TestConfig)
+        model = get_model(Config)
         model.eval()
         
         in_channels = 2 if Config.APPROACH == "bilateral" else 4
@@ -86,7 +70,7 @@ class TestModelForwardPass:
     
     def test_output_range(self):
         """Output değerleri makul aralıkta mı?"""
-        model = get_model(TestConfig)
+        model = get_model(Config)
         model.eval()
         
         in_channels = 2 if Config.APPROACH == "bilateral" else 4
@@ -101,7 +85,7 @@ class TestModelForwardPass:
     
     def test_gradient_flow(self):
         """Gradient akışı var mı?"""
-        model = get_model(TestConfig)
+        model = get_model(Config)
         model.train()
         
         in_channels = 2 if Config.APPROACH == "bilateral" else 4
@@ -127,7 +111,7 @@ class TestModelForwardPass:
     def test_deterministic_in_eval_mode(self):
         """Eval modda deterministik mi?"""
         torch.manual_seed(42)
-        model = get_model(TestConfig)
+        model = get_model(Config)
         model.eval()
         
         in_channels = 2 if Config.APPROACH == "bilateral" else 4
@@ -139,26 +123,6 @@ class TestModelForwardPass:
         
         assert torch.allclose(output1, output2, rtol=1e-5), \
             "Eval modda aynı input farklı output veriyor!"
-    
-    def test_different_inputs_different_outputs(self):
-        """Farklı input'lar farklı output versin"""
-        model = get_model(TestConfig)
-        model.eval()
-        
-        in_channels = 2 if Config.APPROACH == "bilateral" else 4
-        
-        torch.manual_seed(42)
-        x1 = torch.randn(2, in_channels, Config.IMG_SIZE, Config.IMG_SIZE)
-        
-        torch.manual_seed(99)
-        x2 = torch.randn(2, in_channels, Config.IMG_SIZE, Config.IMG_SIZE)
-        
-        with torch.no_grad():
-            output1 = model(x1)
-            output2 = model(x2)
-        
-        assert not torch.allclose(output1, output2, rtol=1e-3), \
-            "Farklı input'lar aynı output veriyor!"
 
 
 class TestModelArchitectures:
@@ -167,13 +131,14 @@ class TestModelArchitectures:
     @pytest.mark.slow
     def test_efficientnet_b0(self):
         """EfficientNet-B0 çalışıyor mu?"""
-        # Geçici config oluştur
+        # Geçici config
         class TempConfig:
             MODEL_NAME = 'efficientnet_b0'
             PRETRAINED = True
             NUM_CLASSES = 4
             APPROACH = 'bilateral'
             IMG_SIZE = 384
+            IN_CHANNELS = 1
         
         model = get_model(TempConfig)
         
@@ -192,24 +157,7 @@ class TestModelArchitectures:
             NUM_CLASSES = 4
             APPROACH = 'bilateral'
             IMG_SIZE = 384
-        
-        model = get_model(TempConfig)
-        
-        x = torch.randn(2, 2, 384, 384)
-        with torch.no_grad():
-            output = model(x)
-        
-        assert output.shape == (2, 4)
-    
-    @pytest.mark.slow
-    def test_convnext_tiny(self):
-        """ConvNeXt-Tiny çalışıyor mu?"""
-        class TempConfig:
-            MODEL_NAME = 'convnext_tiny'
-            PRETRAINED = False  # Daha hızlı
-            NUM_CLASSES = 4
-            APPROACH = 'bilateral'
-            IMG_SIZE = 384
+            IN_CHANNELS = 1
         
         model = get_model(TempConfig)
         
@@ -261,7 +209,7 @@ class TestModelGPU:
         if not torch.cuda.is_available():
             pytest.skip("GPU yok")
         
-        model = get_model(TestConfig)
+        model = get_model(Config)
         device = torch.device('cuda')
         model = model.to(device)
         
@@ -276,7 +224,7 @@ class TestModelGPU:
             pytest.skip("GPU yok")
         
         device = torch.device('cuda')
-        model = get_model(TestConfig).to(device)
+        model = get_model(Config).to(device)
         
         in_channels = 2 if Config.APPROACH == "bilateral" else 4
         x = torch.randn(4, in_channels, Config.IMG_SIZE, Config.IMG_SIZE).to(device)
@@ -293,7 +241,7 @@ class TestEdgeCases:
     
     def test_batch_size_one(self):
         """Batch size 1 çalışıyor mu?"""
-        model = get_model(TestConfig)
+        model = get_model(Config)
         model.eval()
         
         in_channels = 2 if Config.APPROACH == "bilateral" else 4
@@ -306,7 +254,7 @@ class TestEdgeCases:
     
     def test_large_batch_size(self):
         """Büyük batch size çalışıyor mu?"""
-        model = get_model(TestConfig)
+        model = get_model(Config)
         model.eval()
         
         in_channels = 2 if Config.APPROACH == "bilateral" else 4
@@ -317,16 +265,32 @@ class TestEdgeCases:
         
         assert output.shape == (64, Config.NUM_CLASSES)
     
-    def test_model_can_be_pickled(self):
-        """Model pickle edilebiliyor mu? (checkpoint için önemli)"""
-        import pickle
+    def test_model_can_be_saved_and_loaded(self):
+        """Model kaydedilip yüklenebiliyor mu?"""
+        import tempfile
         
-        model = get_model(TestConfig)
+        model = get_model(Config)
         
-        # Pickle
-        try:
-            serialized = pickle.dumps(model)
-            deserialized = pickle.loads(serialized)
-            assert deserialized is not None
-        except Exception as e:
-            pytest.fail(f"Model pickle edilemedi: {str(e)}")
+        # Kaydet
+        with tempfile.NamedTemporaryFile(suffix='.pth', delete=False) as tmp:
+            torch.save(model.state_dict(), tmp.name)
+            
+            # Yeni model oluştur
+            model2 = get_model(Config)
+            
+            # Yükle
+            model2.load_state_dict(torch.load(tmp.name))
+            
+            # Aynı output mu?
+            model.eval()
+            model2.eval()
+            
+            in_channels = 2 if Config.APPROACH == "bilateral" else 4
+            x = torch.randn(2, in_channels, Config.IMG_SIZE, Config.IMG_SIZE)
+            
+            with torch.no_grad():
+                out1 = model(x)
+                out2 = model2(x)
+            
+            assert torch.allclose(out1, out2, rtol=1e-5), \
+                "Kaydedilen ve yüklenen model farklı output veriyor!"

@@ -51,7 +51,7 @@ def adapt_classifier(model, num_classes):
     # ResNet
     elif hasattr(model, 'fc'):
         in_features = model.fc.in_features
-        model.classifier = nn.Linear(in_features, num_classes)
+        model.fc = nn.Linear(in_features, num_classes)
         print(f"Classifier adapte edildi: {in_features} -> {num_classes}")
         
     # ConvNeXt, Swin, ViT
@@ -128,7 +128,7 @@ def adapt_first_conv(model, in_channels):
             padding = old_conv.padding,
             bias = False
         )
-        
+
         with torch.no_grad():
             if in_channels <= 3:
                 new_conv.weight[:, :in_channels] = old_conv.weight[:, :in_channels]
@@ -137,8 +137,34 @@ def adapt_first_conv(model, in_channels):
                     new_conv.weight[:, i] = old_conv.weight[:, i % 3]
 
         model.stem[0] = new_conv
-        
+
         print(f"First conv: 3 -> {in_channels} kanal")
+
+    # Swin Transformer
+    elif hasattr(model, 'patch_embed') and hasattr(model.patch_embed, 'proj'):
+        old_conv = model.patch_embed.proj
+        new_conv = nn.Conv2d(
+            in_channels,
+            old_conv.out_channels,
+            kernel_size = old_conv.kernel_size,
+            stride = old_conv.stride,
+            padding = old_conv.padding,
+            bias = old_conv.bias is not None
+        )
+
+        with torch.no_grad():
+            if in_channels <= 3:
+                new_conv.weight[:, :in_channels] = old_conv.weight[:, :in_channels]
+            else:
+                for i in range(in_channels):
+                    new_conv.weight[:, i] = old_conv.weight[:, i % 3]
+            if old_conv.bias is not None:
+                new_conv.bias = old_conv.bias
+
+        model.patch_embed.proj = new_conv
+
+        print(f"First conv (Swin): 3 -> {in_channels} kanal")
+
     return model
 
 def get_model(config):

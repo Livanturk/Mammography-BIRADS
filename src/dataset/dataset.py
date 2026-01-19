@@ -29,7 +29,7 @@ class BilateralMammogramDataset(Dataset):
         self.class_folders = class_folders
         self.transform = transform
         self.is_train = is_train
-        self.fusion_type = config.fusion_type
+        self.fusion_type = config.FUSION_TYPE
         self.samples = []
         
         self._prepare_dataset()

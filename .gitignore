@@ -4,3 +4,6 @@ pytorch/
 birads/
 __pycache__/
 pretrained_weights/
+mlruns/
+checkpoints/
+.claude/

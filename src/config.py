@@ -7,8 +7,9 @@ import torch
 from pathlib import Path
 
 class Config:
-    # Veri Yolu -  Proje yapısına göre burası update edilmeli (dataset klasörü config.py dosyasına göre nerede kalıyor?)
-    DATA_ROOT = Path("../data")
+    # Veri Yolu - config.py dosyasının bulunduğu yere göre proje root'u belirlenir
+    PROJECT_ROOT = Path(__file__).parent.parent
+    DATA_ROOT = PROJECT_ROOT / "data"
     
     # Train
     TRAIN_CLASSES = {1: "BI-RADS_1", 2: "BI-RADS_2", 4: "BI-RADS_4", 5: "BI-RADS_5"}
@@ -138,7 +139,6 @@ class FastTestConfig(Config):
     
 class SmallDataConfig(Config):
     """Küçük veri seti için kullanılacak"""
-    DATA_ROOT = Path("../data")
     MLFLOW_EXPERIMENT_NAME = "mamografi_birads_prototype_60mb"
     NUM_EPOCHS = 50
     BATCH_SIZE = 16
@@ -146,7 +146,6 @@ class SmallDataConfig(Config):
     
 class LargeDataConfig(Config):
     """Gerçek veri için"""
-    DATA_ROOT = Path("../data")
     MLFLOW_EXPERIMENT_NAME = "mamografi_birads_production"
     BATCH_SIZE = 32
     NUM_EPOCHS = 100
