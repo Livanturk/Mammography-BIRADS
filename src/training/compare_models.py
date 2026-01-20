@@ -548,31 +548,38 @@ class ExperimentRunner:
         # Sonuçları analiz et
         self._analyze_grid_search_results(model_name)
     
-    def compare_fusion_types(self, model_name='efficientnet_b0'):
+    def compare_fusion_types(self, model_name='efficientnet_b0', generate_gradcam=True):
         """
         Farklı fusion tiplerini karşılaştır
-        
+
         Args:
             model_name: Hangi model ile test edilsin?
+            generate_gradcam: Grad-CAM görselleştirmesi üretilsin mi?
         """
         fusion_types = ['early', 'late', 'attention']
-        
+
         print("\n" + "="*70)
         print(f" Fusion tiplerinin karşılaştırması: {model_name}")
         print("="*70)
-        
+        print(f"Grad-CAM: {'Aktif' if generate_gradcam else 'Pasif'}")
+
         for fusion_type in fusion_types:
             config_dict = {
                 'MODEL_NAME': model_name,
                 'FUSION_TYPE': fusion_type,
-                'MLFLOW_EXPERIMENT_NAME': self.experiment_name
+                'MLFLOW_EXPERIMENT_NAME': self.experiment_name,
+                'USE_GRADCAM': generate_gradcam,
             }
-            
+
             run_name = f"{model_name}_{fusion_type}_fusion"
-            
-            self.run_experiment(config_dict, run_name)
-        
+
+            self.run_experiment(config_dict, run_name, generate_gradcam=generate_gradcam)
+
         self._print_comparison_results()
+
+        # Grad-CAM özet sayfası oluştur
+        if generate_gradcam:
+            self._create_gradcam_summary()
     
     def compare_oversampling_strategies(self, model_name='efficientnet_b0'):
         """
@@ -817,7 +824,7 @@ def main():
         runner.grid_search_hyperparameters(model_name=args.model)
 
     elif args.mode == 'fusion_types':
-        runner.compare_fusion_types(model_name=args.model)
+        runner.compare_fusion_types(model_name=args.model, generate_gradcam=not args.no_gradcam)
 
     elif args.mode == 'oversampling':
         runner.compare_oversampling_strategies(model_name=args.model)
