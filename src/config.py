@@ -33,7 +33,7 @@ class Config:
     FUSION_TYPE = "attention"
     
     # GÖRÜNTÜ
-    IMG_SIZE = 384
+    IMG_SIZE = 224
     NUM_CLASSES = 4 # BI-RADS 1, 2, 4, 5
     # ImageNet 3 channel bekliyor ancak elimizdeki görüntüler grayscale (1 kanallı)
     # Bu yüzden IN_CHANNELS ile modelin weightleri RGB channelların ortalaması alınarak 1 channela indirgeniyor.

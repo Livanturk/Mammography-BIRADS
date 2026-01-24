@@ -149,7 +149,27 @@ class LateFusionBiRADS(nn.Module):
               # ilk in_channels kanalını kopyalar
                 new_conv.weight[:, :in_channels] = old_conv.weight[:, :in_channels]
             model.stem[0] = new_conv # RGB'ni (3 channels) first layerını Grayscale'e (1 channel) kopyalar, bu sayede pretrained bilgi kaybolmaz.
-            
+
+        # Swin Transformer
+        elif hasattr(model, 'patch_embed') and hasattr(model.patch_embed, 'proj'):
+            old_conv = model.patch_embed.proj
+            new_conv = nn.Conv2d(
+                in_channels,
+                old_conv.out_channels,
+                kernel_size = old_conv.kernel_size,
+                stride = old_conv.stride,
+                padding = old_conv.padding,
+                bias = old_conv.bias is not None
+            )
+            with torch.no_grad():
+                if in_channels <= 3:
+                    new_conv.weight[:, :in_channels] = old_conv.weight[:, :in_channels]
+                else:
+                    for i in range(in_channels):
+                        new_conv.weight[:, i] = old_conv.weight[:, i % 3]
+                if old_conv.bias is not None:
+                    new_conv.bias = old_conv.bias
+            model.patch_embed.proj = new_conv
 
         return model
 
